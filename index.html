@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FT 02 — LoRA and PEFT Variants</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin-bottom: 2rem;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code {
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 0.05rem 0.35rem;
+            border-radius: 3px;
+            color: #c9d1d9;
+        }
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; }
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        .diagram-box.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-box.dim { color: var(--text-secondary); border-color: var(--border); }
+        .diagram-arrow { color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-vertical .diagram-arrow { font-size: 1.1rem; }
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .hierarchy-level { display: flex; align-items: center; gap: 0.75rem; }
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+        .hierarchy-items { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .hierarchy-item.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.85rem; }
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .callout p { margin-bottom: 0; }
+        .callout p + p { margin-top: 0.5rem; }
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+        .contents-list a { color: var(--text-primary); text-decoration: none; transition: color 0.2s; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+        @media (max-width: 640px) {
+            .slide { padding: 3rem 1rem; min-height: auto; }
+            .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; }
+            .slide h2 { font-size: 1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; }
+            .pipeline { gap: 0.15rem; }
+            .pipeline-step { font-size: 0.6rem; padding: 0.2rem 0.4rem; }
+            .hero h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <div class="series-label">Fine-Tuning &amp; PEFT Series &mdash; Presentation 02</div>
+    <h1><span class="accent">LoRA</span> and PEFT Variants</h1>
+    <p class="subtitle">Low-rank deltas, frozen bases, QLoRA NF4, DoRA magnitude&ndash;direction decomposition, IA3 &mdash; and how to serve multiple adapters from one GPU.</p>
+
+    <div class="tags">
+        <span class="tag">LoRA</span>
+        <span class="tag">QLoRA</span>
+        <span class="tag">DoRA</span>
+        <span class="tag">IA3</span>
+        <span class="tag">PEFT</span>
+        <span class="tag">NF4</span>
+        <span class="tag">Multi-LoRA</span>
+        <span class="tag">Adapter Merging</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">Frozen Base W</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">A (r &times; d)</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">B (d_out &times; r)</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">&Delta;W = BA</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">W + (&alpha;/r)&Delta;W</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Merge / Serve</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">The LoRA Idea &mdash; Low-Rank Deltas, Frozen Base</a></li>
+        <li><a href="#slide-02">LoRA Math &mdash; A&middot;B with Rank r, Scaling &alpha;</a></li>
+        <li><a href="#slide-03">Target Modules &mdash; q/k/v/o_proj &amp; MLPs</a></li>
+        <li><a href="#slide-04">Hyperparameters &mdash; Rank 8 vs 64 vs 128, &alpha;, Dropout</a></li>
+        <li><a href="#slide-05">QLoRA &mdash; 4-bit Base, NF4, Double Quant</a></li>
+        <li><a href="#slide-06">DoRA &mdash; Magnitude-Direction Decomposition</a></li>
+        <li><a href="#slide-07">IA3 &mdash; Even Smaller Perturbations</a></li>
+        <li><a href="#slide-08">Merging Adapters &amp; Multi-LoRA Serving</a></li>
+        <li><a href="#slide-09">What to Take Away</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>The LoRA Idea &mdash; Low-Rank Deltas, Frozen Base</h2>
+    <p>Hu et al. (2021) &mdash; <em>LoRA: Low-Rank Adaptation of Large Language Models</em> &mdash; started from an empirical observation: when a large model is fine-tuned on a downstream task, the <strong>weight update matrix &Delta;W has intrinsically low rank</strong>. The pre-training process has already found a high-dimensional representation; the task-specific delta lives in a much lower-dimensional subspace.</p>
+
+    <p>If that's true, instead of adding a full-rank &Delta;W&nbsp;&isin;&nbsp;<b>R</b><sup>d<sub>out</sub>&times;d<sub>in</sub></sup> (which would be 4&ndash;16 GB of additional parameters for a 7B model), you can represent it as a product of two thin matrices whose combined parameter count is tiny.</p>
+
+    <div class="diagram-flow">
+        <div class="diagram-box dim">Pre-trained W<br/><small>d_out &times; d_in</small><br/><small>frozen, not updated</small></div>
+        <div class="diagram-arrow">+</div>
+        <div class="diagram-box accent">B &middot; A<br/><small>(d_out &times; r) &middot; (r &times; d_in)</small><br/><small>trainable, r &ll; d</small></div>
+        <div class="diagram-arrow">=</div>
+        <div class="diagram-box">W + (&alpha;/r) B&middot;A<br/><small>effective weight at inference</small></div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Why this matters</div>
+        <p>For a Llama-3 8B attention projection of shape 4096&times;4096 = 16.8 M parameters, a rank-16 LoRA uses only 2&times;(4096&times;16) = 131 k parameters &mdash; 0.78 % of the original. A full 7B model's LoRA adapters at rank 16 targeting all q/k/v/o projections occupy roughly 20&ndash;30 MB vs 14 GB for full fine-tuning. VRAM for the optimiser states shrinks proportionally.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>LoRA Math &mdash; A&middot;B with Rank r, Scaling &alpha;</h2>
+    <p>The forward pass through a LoRA-patched linear layer is:</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 700 160" width="700" height="160" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .eq { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 15px; }
+                .eqsub { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .eqacc { fill: #76B900; font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+                .annot { fill: #8b949e; font-family: 'Inter', sans-serif; font-size: 11px; }
+            </style>
+            <text x="30" y="55" class="eq">h = W</text>
+            <text x="90" y="62" class="eqsub">0</text>
+            <text x="100" y="55" class="eq">x  +  </text>
+            <text x="175" y="55" class="eqacc">(&alpha; / r)</text>
+            <text x="255" y="55" class="eqacc"> &middot; B &middot; A &middot; x</text>
+            <line x1="30" y1="75" x2="105" y2="75" stroke="#30363d" stroke-width="1"/>
+            <text x="35" y="90" class="annot">frozen pretrained</text>
+            <text x="35" y="105" class="annot">weight matrix</text>
+            <line x1="175" y1="75" x2="245" y2="75" stroke="#76B900" stroke-width="1"/>
+            <text x="178" y="90" class="annot" style="fill:#76B900">scaling factor</text>
+            <text x="178" y="105" class="annot" style="fill:#76B900">(&alpha; = r &rarr; no scale)</text>
+            <line x1="255" y1="75" x2="430" y2="75" stroke="#d2a8ff" stroke-width="1"/>
+            <text x="258" y="90" class="annot" style="fill:#d2a8ff">trainable rank-r decomposition</text>
+            <text x="258" y="105" class="annot" style="fill:#d2a8ff">B init = zeros, A init = kaiming_uniform</text>
+        </svg>
+    </div>
+
+    <p>Key initialisations: <strong>A is initialised with Kaiming uniform</strong> so the scale of the random projection is sensible; <strong>B is initialised to zeros</strong> so that at the start of training the LoRA delta contributes nothing &mdash; the model begins training identical to the frozen base, which stabilises early loss curves.</p>
+
+    <h3>The &alpha; / r scaling convention</h3>
+    <p>The scaling factor <code>&alpha;/r</code> normalises the magnitude of the LoRA update. If you double the rank without changing &alpha;, the effective update doubles in magnitude &mdash; the learning rate and &alpha; are entangled. Common practice: set <code>&alpha; = r</code> (scale = 1, no amplification) or <code>&alpha; = 2r</code> (doubles the effective update). The HF PEFT library defaults to <code>alpha=16, rank=8</code> giving a 2&times; amplification.</p>
+
+    <div class="callout">
+        <div class="callout-label">Parameter count formula</div>
+        <p>Total LoRA params = &sum;<sub>layers</sub> (d<sub>in</sub> &times; r + r &times; d<sub>out</sub>) across all targeted modules. For Llama-3 8B with <code>r=16</code> targeting all q, k, v, o projections in all 32 layers: 32 &times; 4 &times; 2 &times; 4096 &times; 16 = 16.8 M trainable params out of 8.03 B total &mdash; about 0.21 %.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Target Modules &mdash; q/k/v/o_proj &amp; MLPs</h2>
+    <p>LoRA can be applied to any linear layer. In practice the choice of which layers to target is the most impactful design decision after rank.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Module pattern</th><th>Layer type</th><th>Params targeted (7B)</th><th>Typical choice?</th></tr></thead>
+            <tbody>
+                <tr><td><code>q_proj, k_proj, v_proj, o_proj</code></td><td>Attention projections</td><td>~8 M per layer</td><td>Yes &mdash; baseline</td></tr>
+                <tr><td><code>gate_proj, up_proj, down_proj</code></td><td>MLP / FFN (SwiGLU)</td><td>~22 M per layer</td><td>Yes for strong domain shift</td></tr>
+                <tr><td><code>embed_tokens</code></td><td>Input embedding</td><td>~524 M (vocab &times; d)</td><td>Only for new vocabulary</td></tr>
+                <tr><td><code>lm_head</code></td><td>Output projection</td><td>~524 M</td><td>Only for new token types</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Module Names by Architecture</h3>
+    <div class="hierarchy">
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Llama-3</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">q_proj</span>
+                <span class="hierarchy-item accent">k_proj</span>
+                <span class="hierarchy-item accent">v_proj</span>
+                <span class="hierarchy-item accent">o_proj</span>
+                <span class="hierarchy-item">gate_proj</span>
+                <span class="hierarchy-item">up_proj</span>
+                <span class="hierarchy-item">down_proj</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Mistral</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">q_proj</span>
+                <span class="hierarchy-item accent">k_proj</span>
+                <span class="hierarchy-item accent">v_proj</span>
+                <span class="hierarchy-item accent">o_proj</span>
+                <span class="hierarchy-item">w1</span>
+                <span class="hierarchy-item">w2</span>
+                <span class="hierarchy-item">w3</span>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">Qwen-2.5</div>
+            <div class="hierarchy-items">
+                <span class="hierarchy-item accent">q_proj</span>
+                <span class="hierarchy-item accent">k_proj</span>
+                <span class="hierarchy-item accent">v_proj</span>
+                <span class="hierarchy-item accent">o_proj</span>
+                <span class="hierarchy-item">up_proj</span>
+                <span class="hierarchy-item">down_proj</span>
+                <span class="hierarchy-item">gate_proj</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Axolotl target_modules shorthand</div>
+        <p>Axolotl accepts <code>target_modules: all-linear</code> to LoRA all linear layers. This is thorough but increases VRAM and training time. For most instruction-tuning tasks, just the 4 attention projections is sufficient. Add MLP layers if you're doing significant domain adaptation (e.g. medical, legal) where the FFN's factual recall needs updating.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Hyperparameters &mdash; Rank 8 vs 64 vs 128, &alpha;, Dropout</h2>
+    <p>LoRA has fewer hyperparameters than full fine-tuning, but the ones it has are sensitive. Here is what the research and community practice have converged on.</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Rank (r)</h4>
+            <p><strong>r = 8:</strong> chat &amp; instruction following, minimal domain shift. Smallest VRAM overhead.</p>
+            <p><strong>r = 16&ndash;32:</strong> moderate domain adaptation; code, math, moderate specialisation.</p>
+            <p><strong>r = 64&ndash;128:</strong> large domain shift; medical, legal, multilingual. Diminishing returns above 128 for most tasks.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Alpha (&alpha;)</h4>
+            <p>Controls effective update magnitude via scale <code>&alpha;/r</code>.</p>
+            <p><strong>Common defaults:</strong> <code>&alpha; = r</code> (PEFT docs), <code>&alpha; = 16</code> fixed (many tutorials). <strong>Best practice:</strong> treat &alpha; as a learning-rate multiplier. If loss is slow to decrease, raise &alpha;; if unstable, lower it.</p>
+            <p>RSLoRA (2023) proposes <code>&alpha;/&radic;r</code> normalisation for better stability at high ranks.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Dropout</h4>
+            <p>Applied to the LoRA A matrix output before B. Reduces overfitting on small datasets.</p>
+            <p><strong>Default:</strong> 0.0 (no dropout). Set to 0.05&ndash;0.1 for datasets &lt;10 k examples or when eval loss diverges from train loss after epoch 1.</p>
+            <p>Has minimal effect on large datasets (&gt;100 k examples) &mdash; skip it and save compute.</p>
+        </div>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">PEFT LoraConfig &mdash; recommended starting point for 7B instruction tuning</div>
+<pre><code><span class="kw">from</span> peft <span class="kw">import</span> <span class="type">LoraConfig</span>, <span class="type">TaskType</span>
+
+config = <span class="type">LoraConfig</span>(
+    task_type=<span class="type">TaskType</span>.CAUSAL_LM,
+    r=<span class="num">16</span>,
+    lora_alpha=<span class="num">16</span>,           <span class="cm"># scale = 1.0</span>
+    target_modules=[<span class="str">"q_proj"</span>, <span class="str">"k_proj"</span>, <span class="str">"v_proj"</span>, <span class="str">"o_proj"</span>],
+    lora_dropout=<span class="num">0.05</span>,
+    bias=<span class="str">"none"</span>,              <span class="cm"># "all" or "lora_only" are rarely better</span>
+    use_rslora=<span class="kw">True</span>,           <span class="cm"># alpha/sqrt(r) normalisation (PEFT &ge;0.6)</span>
+)</code></pre>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>QLoRA &mdash; 4-bit Base, NF4, Double Quant</h2>
+    <p>Dettmers et al. (2023) &mdash; <em>QLoRA: Efficient Finetuning of Quantized LLMs</em> &mdash; combined LoRA with 4-bit weight quantisation. The three technical innovations are tightly coupled and each is necessary for the approach to work without accuracy collapse.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Component</th><th>What it is</th><th>Why it matters</th></tr></thead>
+            <tbody>
+                <tr><td><strong>NF4 (NormalFloat4)</strong></td><td>An information-theoretically optimal 4-bit data type for normally-distributed weights. 16 quantisation levels spaced to minimise expected quantisation error under a Gaussian prior.</td><td>Normal 4-bit integer quantisation loses 0.5&ndash;1 perplexity on LLMs; NF4 closes &gt;80 % of that gap.</td></tr>
+                <tr><td><strong>Double Quantisation</strong></td><td>The per-block quantisation scale constants (themselves fp32) are quantised again with 8-bit floats. Saves ~0.37 bits per parameter extra.</td><td>Reduces the overhead of storing 32-fp32 scale constants per 64-element block from 0.5 bits/param to ~0.13 bits/param.</td></tr>
+                <tr><td><strong>Paged Optimiser</strong></td><td>NVIDIA unified memory (CUDA managed memory) pages GPU memory to CPU RAM on overflow. Uses <code>bitsandbytes</code> paged AdamW.</td><td>Prevents OOM crashes during backward when a single step spikes above available VRAM, at the cost of latency on the spill steps.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">bitsandbytes + PEFT QLoRA setup (transformers &ge;4.36)</div>
+<pre><code><span class="kw">from</span> transformers <span class="kw">import</span> <span class="type">AutoModelForCausalLM</span>, <span class="type">BitsAndBytesConfig</span>
+<span class="kw">import</span> torch
+
+bnb_cfg = <span class="type">BitsAndBytesConfig</span>(
+    load_in_4bit=<span class="kw">True</span>,
+    bnb_4bit_quant_type=<span class="str">"nf4"</span>,
+    bnb_4bit_use_double_quant=<span class="kw">True</span>,
+    bnb_4bit_compute_dtype=torch.bfloat16,  <span class="cm"># dequantise to bf16 for compute</span>
+)
+
+model = <span class="type">AutoModelForCausalLM</span>.from_pretrained(
+    <span class="str">"meta-llama/Meta-Llama-3-8B"</span>,
+    quantization_config=bnb_cfg,
+    device_map=<span class="str">"auto"</span>,
+)
+<span class="cm"># Then wrap with PEFT LoRA as normal; gradients flow through bf16 adapters</span></code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">QLoRA VRAM budget (Llama-3 8B)</div>
+        <p>Base model at NF4: 8B &times; 0.5 bytes &asymp; 4.0 GB. LoRA adapters r=16, all attn: ~130 MB. Activations (batch=4, seq=2048): ~1.5 GB. Optimiser states (bf16 adapters): ~260 MB. <strong>Total: ~6 GB</strong> &mdash; fits a single RTX 3080 10 GB with room to spare.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>DoRA &mdash; Magnitude-Direction Decomposition</h2>
+    <p>Liu et al. (2024) &mdash; <em>DoRA: Weight-Decomposed Low-Rank Adaptation</em> &mdash; argued that LoRA fails to match full fine-tuning because it conflates two independent properties of each weight matrix: its <em>magnitude</em> (the column-wise L2 norm) and its <em>direction</em> (the normalised column vectors).</p>
+
+    <p>DoRA decomposes the pretrained weight as <strong>W<sub>0</sub> = m &middot; V / ||V||</strong> where <strong>m</strong>&nbsp;&isin;&nbsp;<b>R</b><sup>1&times;k</sup> is the magnitude vector (one scalar per column) and <strong>V</strong>&nbsp;&isin;&nbsp;<b>R</b><sup>d&times;k</sup> is the direction. Only the <strong>direction</strong> update is low-rank (LoRA); the <strong>magnitude</strong> is a separate trainable scalar per column.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 700 140" width="700" height="140" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .dora-eq { font-family: 'JetBrains Mono', monospace; font-size: 13px; fill: #e6edf3; }
+                .dora-ann { font-family: 'Inter', sans-serif; font-size: 11px; fill: #8b949e; }
+                .dora-acc { fill: #76B900; font-weight: 700; }
+            </style>
+            <text x="30" y="55" class="dora-eq">W' = m &middot; (W</text>
+            <text x="178" y="62" style="font-family:'JetBrains Mono',monospace;font-size:10px;fill:#8b949e">0</text>
+            <text x="185" y="55" class="dora-eq"> + </text>
+            <text x="210" y="55" class="dora-eq dora-acc">BA</text>
+            <text x="235" y="55" class="dora-eq">) / ||W</text>
+            <text x="298" y="62" style="font-family:'JetBrains Mono',monospace;font-size:10px;fill:#8b949e">0</text>
+            <text x="305" y="55" class="dora-eq"> + </text>
+            <text x="330" y="55" class="dora-eq dora-acc">BA</text>
+            <text x="355" y="55" class="dora-eq">||</text>
+            <text x="30"  y="90" class="dora-ann">m: trainable magnitude (1 &times; k scalars) &mdash; tiny extra cost</text>
+            <text x="30"  y="110" class="dora-ann">BA: LoRA rank-r direction update (standard LoRA term)</text>
+            <text x="30"  y="130" class="dora-ann">Result: separates learning "how big" from "in which direction" &mdash; more stable on complex tasks</text>
+        </svg>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Method</th><th>Trainable params (7B, r=16)</th><th>Commonsense reasoning gain vs LoRA</th><th>Extra cost</th></tr></thead>
+            <tbody>
+                <tr><td>LoRA</td><td>~16.8 M (0.21 %)</td><td>baseline</td><td>&mdash;</td></tr>
+                <tr><td>DoRA</td><td>~17.2 M (0.215 %)</td><td>+1&ndash;3 % on LLaMA commonsense benchmarks</td><td>~1 % extra VRAM for m vectors</td></tr>
+                <tr><td>Full FT</td><td>7 000 M (100 %)</td><td>+4&ndash;6 % (ceiling)</td><td>14&times; VRAM</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Using DoRA in PEFT</div>
+        <p>Set <code>use_dora=True</code> in <code>LoraConfig</code> (PEFT &ge;0.9). DoRA is transparent to the rest of the training loop &mdash; same trainer, same merging. Axolotl 0.4+ supports <code>peft_lora_dora: true</code>. Most useful for tasks with significant style or capability gap from the base model; marginal for light instruction-tuning.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>IA3 &mdash; Even Smaller Perturbations</h2>
+    <p>Liu et al. (2022) &mdash; <em>Few-Shot Parameter-Efficient Fine-Tuning is Better and Cheaper than In-Context Learning</em> &mdash; introduced IA<sup>3</sup> (Infused Adapter by Inhibiting and Amplifying Inner Activations). Instead of adding a rank-r matrix delta, IA<sup>3</sup> multiplies key, value, and FFN activation streams by learned <em>scalar vectors</em>.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>IA3 Mechanics</h4>
+            <p>For each attention layer, introduce three learned vectors:</p>
+            <ul>
+                <li><strong>l<sub>k</sub>&nbsp;&isin;&nbsp;R<sup>d_k</sup></strong> &mdash; scales the key projections</li>
+                <li><strong>l<sub>v</sub>&nbsp;&isin;&nbsp;R<sup>d_v</sup></strong> &mdash; scales the value projections</li>
+                <li><strong>l<sub>ff</sub>&nbsp;&isin;&nbsp;R<sup>d_ff</sup></strong> &mdash; scales the intermediate FFN activations</li>
+            </ul>
+            <p>Element-wise multiply: <code>k' = l_k &odot; k</code>. Initialise all l to <strong>ones</strong> (identity at t=0).</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Comparison to LoRA</h4>
+            <p>IA<sup>3</sup> parameter count for a 7B model: ~3 vectors &times; 32 layers &times; d &asymp; 400 k parameters total &mdash; roughly 40&times; fewer than LoRA at r=16.</p>
+            <p>Quality: approaches LoRA on many few-shot classification tasks; lags behind on open-ended generation where richer representational change is needed.</p>
+            <p><strong>Best fit:</strong> extremely constrained serving environments, few-shot classification, tasks with well-defined closed output spaces.</p>
+        </div>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">PEFT IA3Config</div>
+<pre><code><span class="kw">from</span> peft <span class="kw">import</span> <span class="type">IA3Config</span>, <span class="type">TaskType</span>, get_peft_model
+
+config = <span class="type">IA3Config</span>(
+    task_type=<span class="type">TaskType</span>.CAUSAL_LM,
+    target_modules=[<span class="str">"k_proj"</span>, <span class="str">"v_proj"</span>, <span class="str">"down_proj"</span>],
+    feedforward_modules=[<span class="str">"down_proj"</span>],  <span class="cm"># which modules are feedforward</span>
+)
+model = get_peft_model(base_model, config)
+model.print_trainable_parameters()
+<span class="cm"># trainable params: 401,408 || all params: 8,030,000,000 || 0.005 %</span></code></pre>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Merging Adapters &amp; Multi-LoRA Serving</h2>
+    <p>Once training is complete there are two distinct deployment patterns: <strong>merge-and-serve</strong> (fold the adapter into the base weights permanently) or <strong>hot-swap serving</strong> (keep the base frozen and load adapters per request at inference time).</p>
+
+    <h3>Merge (Linear Combination)</h3>
+    <p>The merged weight is simply <code>W<sub>merged</sub> = W<sub>0</sub> + (&alpha;/r) &middot; B &middot; A</code>. This produces a single model identical at inference to LoRA but with zero adapter overhead. PEFT handles this with <code>model.merge_and_unload()</code>. The result is a standard HuggingFace model you can push to Hub.</p>
+
+    <div class="code-block">
+        <div class="code-header">peft merge_and_unload + safe serialise</div>
+<pre><code><span class="kw">from</span> peft <span class="kw">import</span> <span class="type">PeftModel</span>
+
+base   = <span class="type">AutoModelForCausalLM</span>.from_pretrained(<span class="str">"meta-llama/Meta-Llama-3-8B"</span>)
+model  = <span class="type">PeftModel</span>.from_pretrained(base, <span class="str">"./lora-adapter-dir"</span>)
+merged = model.merge_and_unload()   <span class="cm"># returns a plain AutoModelForCausalLM</span>
+merged.save_pretrained(<span class="str">"./merged-model"</span>, safe_serialization=<span class="kw">True</span>)</code></pre>
+    </div>
+
+    <h3>Multi-LoRA Serving</h3>
+    <p>Frameworks like <strong>vLLM</strong> (v0.4+) and <strong>LoRAX</strong> load one base model into GPU VRAM and hot-swap per-request adapter weights from CPU RAM or disk. Because only the LoRA A/B matrices need to change (&lt;1 % of model size), adapter swap overhead is minimal &mdash; typically &lt;5 ms for r=16.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>System</th><th>Max concurrent adapters</th><th>Adapter source</th><th>Merge required?</th></tr></thead>
+            <tbody>
+                <tr><td>vLLM &ge;0.4</td><td>Hundreds (paged)</td><td>HuggingFace Hub or local</td><td>No</td></tr>
+                <tr><td>LoRAX</td><td>Thousands (offload to CPU)</td><td>S3 / local</td><td>No</td></tr>
+                <tr><td>Ollama</td><td>1 per instance</td><td>GGUF merged model</td><td>Yes (into GGUF)</td></tr>
+                <tr><td>llama.cpp</td><td>1 per load</td><td>.gguf adapter file</td><td>Optional</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Adapter soup / model merging</div>
+        <p>TIES-merging and DARE (both in <code>mergekit</code>) let you linearly combine multiple LoRA adapters trained on different tasks into a single merged model &mdash; analogous to model ensembling but at the weight level. This is distinct from multi-LoRA serving: here you want one merged model that retains properties from all source adapters, trading some peak performance per task for breadth.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>What to Take Away</h2>
+    <ul>
+        <li><strong>LoRA freezes the base and trains B&middot;A.</strong> Initialise B to zeros so the delta starts at zero; A with Kaiming uniform. Total trainable params is typically 0.1&ndash;0.5 % of base.</li>
+        <li><strong>&alpha;/r is your effective learning rate multiplier.</strong> Setting &alpha; = r means scale 1.0; &alpha; = 2r means 2.0 amplification. RSLoRA (&alpha;/&radic;r) stabilises training at high ranks.</li>
+        <li><strong>Target modules first, then rank.</strong> Start with q/k/v/o_proj at r=16. Add MLP layers only if you need significant domain knowledge transfer.</li>
+        <li><strong>QLoRA = NF4 quantisation + LoRA adapters.</strong> Fits a 7B model plus adapters in ~6 GB VRAM. The three innovations (NF4, double quant, paged optimiser) are all necessary.</li>
+        <li><strong>DoRA splits magnitude from direction.</strong> Same rank as LoRA, ~1 % extra params, +1&ndash;3 % quality on challenging tasks. Use when LoRA under-fits.</li>
+        <li><strong>IA3 is 40&times; smaller than LoRA.</strong> Scales key, value, and FFN streams by learned vectors. Best for few-shot classification, not open-ended generation.</li>
+        <li><strong>Multi-LoRA serving (vLLM / LoRAX) keeps one base model, swaps adapters per request.</strong> Merge only when you want a single monolithic artefact.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Where to next</div>
+        <p>Deck 03 confronts what SFT and LoRA cannot fix: the model that gives technically correct but unhelpful, misleading, or harmful outputs. That's the problem RLHF and PPO were designed to solve.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Fine_Tuning">Fine-Tuning &amp; PEFT Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Fine_Tuning">Back to Series Index</a></p>
+</footer>
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+</body>
+</html>
